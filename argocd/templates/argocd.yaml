@@ -1,8 +1,8 @@
 ---
 apiVersion: xl-release/v1
-kind: Templates
+kind: Templates 
 metadata:
-  home: test
+  home: argocd
 spec:
 - template: Continuous Delivery
   phases:
@@ -12,6 +12,7 @@ spec:
       type: github.CreateBranch
       server: github
       repositoryName: "${GIT_REPO_NAME}"
+      oldBranch: main
       newBranch: "revision_${NEW_TAG}"
     - name: Create Local Clone
       type: github.cloneRepository
@@ -39,7 +40,7 @@ spec:
       server: github
       repositoryName: "${GIT_REPO_NAME}"
       ^title: "${NEW_TAG} - Updated tag"
-      base: master
+      base: main
       head: "revision_${NEW_TAG}"
       body: Updated tag
       pullRequestNumber: 0
@@ -161,4 +162,3 @@ spec:
   - type: xlrelease.StringVariable
     key: CONTAINER_NAME
   riskProfile: Default risk profile
-  
