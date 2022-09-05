@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: helloworld-prod-container
-        image: samuelblin/helloworld:6b8196a
+        image: samuelblin/helloworld:e40db88
         ports:
         - containerPort: 8086
 ---
