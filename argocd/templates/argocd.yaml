@@ -1,6 +1,6 @@
 ---
 apiVersion: xl-release/v1
-kind: Templates 
+kind: Templates
 metadata:
   home: argocd
 spec:
