@@ -1,6 +1,6 @@
 ---
 apiVersion: xl-release/v1
-kind: Templates 
+kind: Templates
 metadata:
   home: argocd
 spec:
@@ -89,12 +89,13 @@ spec:
   riskProfile: Default risk profile
 - template: Environment Promotion
   phases:
-  - phase: New Phase
+  - phase: Promotion
     tasks:
     - name: Create Revision Branch
       type: github.CreateBranch
       server: github
       repositoryName: "${GIT_REPO_NAME}"
+      oldBranch: main
       newBranch: "revision_${NEW_TAG}"
     - name: Create Local Clone
       type: github.cloneRepository
@@ -121,7 +122,7 @@ spec:
       server: github
       repositoryName: "${GIT_REPO_NAME}"
       ^title: "${NEW_TAG} - Updated tag"
-      base: master
+      base: main
       head: "revision_${NEW_TAG}"
       body: Updated tag
       pullRequestNumber: 0
@@ -134,6 +135,13 @@ spec:
       commitMessage: Approved Automation
       variableMapping:
         pythonScript.pullRequestNumber: "${PULL_REQUEST_NO}"
+    - name: Wait for merge
+      type: github.WaitForMerge
+      server: github
+      repositoryName: "${GIT_REPO_NAME}"
+      pollInterval: 10
+      variableMapping:
+        pythonScript.prid: "${PULL_REQUEST_NO}"
     - name: Sync Argo Application
       type: argocd.syncApplication
       argocdServer: argo-minikube
@@ -142,6 +150,7 @@ spec:
       type: argocd.getSyncStatus
       argocdServer: argo-minikube
       appName: "${ARGO_APP_NAME}"
+    color: '#3d6c9e'
   variables:
   - type: xlrelease.StringVariable
     key: ARGO_APP_NAME
