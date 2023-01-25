@@ -2,7 +2,7 @@
 apiVersion: xl-release/v1
 kind: Templates
 metadata:
-  home: argo-cd
+  home: argocd
 spec:
 - template: Continuous Delivery
   phases:
