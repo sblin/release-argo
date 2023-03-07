@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: helloworld-container
-        image: samuelblin/helloworld:9b53e26
+        image: samuelblin/helloworld:d79208b
         ports:
         - containerPort: 8080
 ---
