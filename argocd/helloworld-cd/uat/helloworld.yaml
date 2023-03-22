@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: helloworld-uat-container
-        image: samuelblin/helloworld:d79208b
+        image: samuelblin/helloworld:8b10645
         ports:
         - containerPort: 8085
 ---
