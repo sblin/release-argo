@@ -1,0 +1,15 @@
+replicaCount: 1
+
+labels:
+  app: helloworld
+
+selectorLabels:
+  app: helloworld
+
+image:
+  repository: samuelblin/helloworld
+  tag: "a41c02b"
+
+service:
+  port: 80
+
