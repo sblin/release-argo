@@ -38,7 +38,7 @@ jobs:
         DOCKER_REGISTRY_HOST: ${{ secrets.DOCKER_REGISTRY_HOST }}
         DOCKER_REPO: ${{ secrets.DOCKER_REPO }}
       run: |
-        cd argocd/helloworld
+        cd argocd/helloworld-src
         docker login --username ${DOCKER_USER} --password ${DOCKER_PASS}
         docker build -t ${DOCKER_REPO}/helloworld:${SHA8} -f Dockerfile .
         docker tag ${DOCKER_REPO}/helloworld:${SHA8} ${DOCKER_REGISTRY_HOST}/${DOCKER_REPO}/helloworld:${SHA8}
