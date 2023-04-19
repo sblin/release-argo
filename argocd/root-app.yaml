@@ -11,6 +11,6 @@ spec:
     name: in-cluster
   project: default
   source:
-    path: apps
+    path: argocd
     repoURL: https://github.com/sblin/release-argo
     targetRevision: HEAD
