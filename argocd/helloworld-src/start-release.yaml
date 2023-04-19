@@ -9,6 +9,6 @@ spec:
     GIT_REPO_URL: "https://github.com/sblin/release-argo.git"
     GIT_REPO_NAME: "release-argo"   
     LOCAL_GIT_CLONE_PATH: "/tmp/release-argo"
-    MANIFEST_PATH_IN_GIT: "argocd/helloworld-cd/dev"
+    MANIFEST_PATH_IN_GIT: "argocd/apps/helloworld/dev"
     MANIFEST_FILE: "helloworld.yaml"
     NEW_TAG: PLACEHOLDER
