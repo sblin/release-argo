@@ -5,7 +5,7 @@ metadata:
   labels:
     app: helloworld-uat
 spec:
-  replicas: 2
+  replicas: 3
   selector:
     matchLabels:
       app: helloworld-uat
@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: helloworld-uat-container
-        image: samuelblin/helloworld:a41c02b
+        image: samuelblin/helloworld:5e9111f
         ports:
         - containerPort: 8085
 ---
