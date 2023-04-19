@@ -11,7 +11,7 @@ spec:
     name: in-cluster
   project: helloworld
   source:
-    path: apps/helloworld/dev
+    path: argocd/apps/helloworld/dev
     repoURL: https://github.com/sblin/release-argo
     targetRevision: HEAD
 ---
@@ -28,7 +28,7 @@ spec:
     name: in-cluster
   project: helloworld
   source:
-    path: apps/helloworld/uat
+    path: argocd/apps/helloworld/uat
     repoURL: https://github.com/sblin/release-argo
     targetRevision: HEAD
 ---
@@ -45,6 +45,6 @@ spec:
     name: in-cluster
   project: helloworld
   source:
-    path: apps/helloworld/prod
+    path: argocd/apps/helloworld/prod
     repoURL: https://github.com/sblin/release-argo
     targetRevision: HEAD
