@@ -1,0 +1,50 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: helloworld-dev
+  namespace: argocd
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  destination:
+    namespace: helloworld
+    name: in-cluster
+  project: helloworld
+  source:
+    path: apps/helloworld/dev
+    repoURL: https://github.com/sblin/release-argo
+    targetRevision: HEAD
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: helloworld-uat
+  namespace: argocd
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  destination:
+    namespace: helloworld
+    name: in-cluster
+  project: helloworld
+  source:
+    path: apps/helloworld/uat
+    repoURL: https://github.com/sblin/release-argo
+    targetRevision: HEAD
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: helloworld-prod
+  namespace: argocd
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  destination:
+    namespace: helloworld
+    name: in-cluster
+  project: helloworld
+  source:
+    path: apps/helloworld/prod
+    repoURL: https://github.com/sblin/release-argo
+    targetRevision: HEAD

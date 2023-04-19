@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'argocd/helloworld/**'
+      - 'argocd/helloworld-src/**'
 
 jobs:
   build:
@@ -28,7 +28,7 @@ jobs:
 
     - name: Build with Maven
       run: |
-        cd argocd/helloworld
+        cd argocd/helloworld-src
         mvn clean install
         
     - name: Docker Build 
@@ -50,7 +50,7 @@ jobs:
         XLR_PASS: ${{ secrets.XLR_PASS }}
         XLR_URL: ${{ secrets.XLR_URL }}   
       run: |
-        cd argocd/helloworld
+        cd argocd/helloworld-src
         sed -i "s/PLACEHOLDER/$SHA8/g" start-release.yaml
         curl -LO https://dist.xebialabs.com/public/xl-cli/22.2.0/linux-amd64/xl
         chmod +x xl
