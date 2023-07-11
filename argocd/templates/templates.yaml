@@ -1,0 +1,656 @@
+---
+apiVersion: xl-release/v1
+kind: Templates
+metadata:
+  home: argocd
+spec:
+- template: Continuous Delivery
+  scheduledStartDate: 2022-11-02T17:17:20.161+01:00
+  dueDate: 2022-11-02T18:17:20.161+01:00
+  phases:
+  - phase: Deploy in Dev
+    tasks:
+    - name: Create Revision Branch
+      type: github.CreateBranch
+      server: github
+      repositoryName: "${GIT_REPO_NAME}"
+      oldBranch: main
+      newBranch: "revision_${NEW_TAG}"
+    - name: Create Local Clone
+      type: github.cloneRepository
+      server: github
+      repositoryName: "${GIT_REPO_NAME}"
+      repositoryUrl: "${GIT_REPO_URL}"
+      localPath: "${LOCAL_GIT_CLONE_PATH}"
+      branchName: "revision_${NEW_TAG}"
+      removeExistingFolder: true
+    - name: Update Manifest File
+      type: kubernetes.updateManifest
+      manifestPath: "${LOCAL_GIT_CLONE_PATH}/${GIT_REPO_NAME}/${MANIFEST_PATH_IN_GIT}/${MANIFEST_FILE}"
+      imageUpdates:
+        helloworld-container: "samuelblin/helloworld:${NEW_TAG}"
+    - name: Commit And Push Changes
+      type: github.commitFiles
+      server: github
+      localPath: "${LOCAL_GIT_CLONE_PATH}/${GIT_REPO_NAME}"
+      files:
+      - "${MANIFEST_PATH_IN_GIT}/${MANIFEST_FILE}"
+      commitMessage: Updated image tag
+      push: true
+    - name: Create Pull Request
+      type: github.CreatePullRequest
+      server: github
+      repositoryName: "${GIT_REPO_NAME}"
+      ^title: "${NEW_TAG} - Updated tag"
+      base: main
+      head: "revision_${NEW_TAG}"
+      body: Updated tag
+      variableMapping:
+        pythonScript.pullRequestNumber: "${PULL_REQUEST_NO}"
+    - name: Merge Pull Request
+      type: github.MergePullRequest
+      server: github
+      repositoryName: "${GIT_REPO_NAME}"
+      commitMessage: Approved Automation
+      variableMapping:
+        pythonScript.pullRequestNumber: "${PULL_REQUEST_NO}"
+    - name: Wait for merge
+      type: github.WaitForMerge
+      server: github
+      repositoryName: "${GIT_REPO_NAME}"
+      pollInterval: 10
+      variableMapping:
+        pythonScript.prid: "${PULL_REQUEST_NO}"
+    - name: Sync Argo Application
+      type: argocd.syncApplication
+      argocdServer: ArgoCD (192.168.56.3:30008)
+      appName: "${ARGO_APP_NAME}"
+    - name: Get Application Sync Status
+      type: argocd.getSyncStatus
+      argocdServer: ArgoCD (192.168.56.3:30008)
+      appName: "${ARGO_APP_NAME}"
+    color: '#3d6c9e'
+  - phase: Promote in UAT-PROD
+    tasks:
+    - name: Promote-UAT-PROD
+      type: xlrelease.CreateReleaseTask
+      newReleaseTitle: "Promote-UAT-PROD-${NEW_TAG}"
+      templateVariables:
+      - type: xlrelease.StringVariable
+        key: ARGO_APP_NAME
+        value: "${ARGO_APP_NAME}"
+      - type: xlrelease.StringVariable
+        key: NEW_TAG
+        value: "${NEW_TAG}"
+      - type: xlrelease.StringVariable
+        key: GIT_REPO_URL
+        value: "${GIT_REPO_URL}"
+      - type: xlrelease.StringVariable
+        key: GIT_REPO_NAME
+        value: "${GIT_REPO_NAME}"
+      - type: xlrelease.StringVariable
+        key: LOCAL_GIT_CLONE_PATH
+        value: "${LOCAL_GIT_CLONE_PATH}"
+      - type: xlrelease.StringVariable
+        key: MANIFEST_PATH_IN_GIT
+        value: "${MANIFEST_PATH_IN_GIT}"
+      - type: xlrelease.StringVariable
+        key: MANIFEST_FILE
+        value: "${MANIFEST_FILE}"
+      - type: xlrelease.IntegerVariable
+        key: PULL_REQUEST_NO
+      template: ./Promote-UAT-PROD
+    color: '#3d6c9e'
+  tags:
+  - argocd
+  variables:
+  - type: xlrelease.StringVariable
+    key: ARGO_APP_NAME
+  - type: xlrelease.StringVariable
+    key: NEW_TAG
+  - type: xlrelease.StringVariable
+    key: GIT_REPO_URL
+  - type: xlrelease.StringVariable
+    key: GIT_REPO_NAME
+  - type: xlrelease.StringVariable
+    key: LOCAL_GIT_CLONE_PATH
+  - type: xlrelease.StringVariable
+    key: MANIFEST_PATH_IN_GIT
+  - type: xlrelease.StringVariable
+    key: MANIFEST_FILE
+  - type: xlrelease.IntegerVariable
+    key: PULL_REQUEST_NO
+  - type: xlrelease.StringVariable
+    key: uat_releaseID
+    requiresValue: false
+    showOnReleaseStart: false
+  - type: xlrelease.StringVariable
+    key: prod_releaseID
+    requiresValue: false
+    showOnReleaseStart: false
+  variableMapping:
+    scriptUserPassword: "${global.user_admin_token}"
+  riskProfile: Default risk profile
+- template: Promote-UAT-PROD
+  scheduledStartDate: 2022-11-02T17:17:20.161+01:00
+  dueDate: 2022-11-02T18:17:20.161+01:00
+  phases:
+  - phase: Promote in UAT
+    tasks:
+    - name: Validate Promotion to UAT
+      type: xlrelease.GateTask
+      owner: admin
+      conditions:
+      - name: Dev has been tested and validated
+        type: xlrelease.GateCondition
+    - name: Promote in UAT
+      type: xlrelease.CreateReleaseTask
+      newReleaseTitle: Deploy in UAT
+      templateVariables:
+      - type: xlrelease.StringVariable
+        key: NEW_TAG
+        value: "${NEW_TAG}"
+      createdReleaseId: "${uat_releaseID}"
+      template: ./Promotion to UAT
+    - name: Wait for UAT Promotion
+      type: xlrelease.GateTask
+      dependencies:
+      - type: xlrelease.Dependency
+        targetId: "${uat_releaseID}"
+    color: '#3d6c9e'
+  - phase: Promote in Production
+    tasks:
+    - name: Validate Promotion to Production
+      type: xlrelease.GateTask
+      owner: admin
+    - name: Promote in Production
+      type: xlrelease.CreateReleaseTask
+      newReleaseTitle: Promotion in Production
+      templateVariables:
+      - type: xlrelease.StringVariable
+        key: NEW_TAG
+        value: "${NEW_TAG}"
+      createdReleaseId: "${prod_releaseID}"
+      template: ./Promotion to PROD
+    - name: Wait for Production Promotion
+      type: xlrelease.GateTask
+      dependencies:
+      - type: xlrelease.Dependency
+        targetId: "${prod_releaseID}"
+    color: '#3d6c9e'
+  tags:
+  - argocd
+  variables:
+  - type: xlrelease.StringVariable
+    key: ARGO_APP_NAME
+  - type: xlrelease.StringVariable
+    key: NEW_TAG
+  - type: xlrelease.StringVariable
+    key: GIT_REPO_URL
+  - type: xlrelease.StringVariable
+    key: GIT_REPO_NAME
+  - type: xlrelease.StringVariable
+    key: LOCAL_GIT_CLONE_PATH
+  - type: xlrelease.StringVariable
+    key: MANIFEST_PATH_IN_GIT
+  - type: xlrelease.StringVariable
+    key: MANIFEST_FILE
+  - type: xlrelease.IntegerVariable
+    key: PULL_REQUEST_NO
+  - type: xlrelease.StringVariable
+    key: uat_releaseID
+    requiresValue: false
+    showOnReleaseStart: false
+  - type: xlrelease.StringVariable
+    key: prod_releaseID
+    requiresValue: false
+    showOnReleaseStart: false
+  variableMapping:
+    scriptUserPassword: "${global.user_admin_token}"
+  riskProfile: Default risk profile
+- template: Promotion to PROD
+  scheduledStartDate: 2022-11-02T17:17:20.480+01:00
+  dueDate: 2022-11-02T18:17:20.480+01:00
+  phases:
+  - phase: Promotion
+    tasks:
+    - name: Create Revision Branch
+      type: github.CreateBranch
+      server: github
+      repositoryName: "${GIT_REPO_NAME}"
+      oldBranch: main
+      newBranch: "revision_${NEW_TAG}"
+    - name: Create Local Clone
+      type: github.cloneRepository
+      server: github
+      repositoryName: "${GIT_REPO_NAME}"
+      repositoryUrl: "${GIT_REPO_URL}"
+      localPath: "${LOCAL_GIT_CLONE_PATH}"
+      branchName: "revision_${NEW_TAG}"
+      removeExistingFolder: true
+    - name: Update Manifest File
+      type: kubernetes.updateManifest
+      manifestPath: "${LOCAL_GIT_CLONE_PATH}/${GIT_REPO_NAME}/${MANIFEST_PATH_IN_GIT}/${MANIFEST_FILE}"
+      imageUpdates:
+        ${CONTAINER_NAME}: "samuelblin/helloworld:${NEW_TAG}"
+    - name: Commit And Push Changes
+      type: github.commitFiles
+      server: github
+      localPath: "${LOCAL_GIT_CLONE_PATH}/${GIT_REPO_NAME}"
+      files:
+      - "${MANIFEST_PATH_IN_GIT}/${MANIFEST_FILE}"
+      commitMessage: Updated image tag
+      push: true
+    - name: Create Pull Request
+      type: github.CreatePullRequest
+      server: github
+      repositoryName: "${GIT_REPO_NAME}"
+      ^title: "${NEW_TAG} - Updated tag"
+      base: main
+      head: "revision_${NEW_TAG}"
+      body: Updated tag
+      variableMapping:
+        pythonScript.pullRequestNumber: "${PULL_REQUEST_NO}"
+    - name: Merge Pull Request
+      type: github.MergePullRequest
+      server: github
+      repositoryName: "${GIT_REPO_NAME}"
+      commitMessage: Approved Automation
+      variableMapping:
+        pythonScript.pullRequestNumber: "${PULL_REQUEST_NO}"
+    - name: Wait for merge
+      type: github.WaitForMerge
+      server: github
+      repositoryName: "${GIT_REPO_NAME}"
+      pollInterval: 10
+      variableMapping:
+        pythonScript.prid: "${PULL_REQUEST_NO}"
+    - name: Sync Argo Application
+      type: argocd.syncApplication
+      argocdServer: ArgoCD (192.168.56.3:30008)
+      appName: "${ARGO_APP_NAME}"
+    - name: Get Application Sync Status
+      type: argocd.getSyncStatus
+      argocdServer: ArgoCD (192.168.56.3:30008)
+      appName: "${ARGO_APP_NAME}"
+    color: '#3d6c9e'
+  tags:
+  - argocd
+  variables:
+  - type: xlrelease.StringVariable
+    key: ARGO_APP_NAME
+    showOnReleaseStart: false
+    value: helloworld-prod
+  - type: xlrelease.StringVariable
+    key: NEW_TAG
+  - type: xlrelease.StringVariable
+    key: GIT_REPO_URL
+    showOnReleaseStart: false
+    value: https://github.com/sblin/release-argo.git
+  - type: xlrelease.StringVariable
+    key: GIT_REPO_NAME
+    showOnReleaseStart: false
+    value: release-argo
+  - type: xlrelease.StringVariable
+    key: LOCAL_GIT_CLONE_PATH
+    showOnReleaseStart: false
+    value: /tmp/release-argo-prod
+  - type: xlrelease.StringVariable
+    key: MANIFEST_PATH_IN_GIT
+    showOnReleaseStart: false
+    value: argocd/apps/helloworld/prod
+  - type: xlrelease.StringVariable
+    key: MANIFEST_FILE
+    showOnReleaseStart: false
+    value: helloworld.yaml
+  - type: xlrelease.IntegerVariable
+    key: PULL_REQUEST_NO
+    showOnReleaseStart: false
+  - type: xlrelease.StringVariable
+    key: CONTAINER_NAME
+    showOnReleaseStart: false
+    value: helloworld-prod-container
+  variableMapping:
+    scriptUserPassword: "${global.user_admin_token}"
+  riskProfile: Default risk profile
+- template: Promotion to UAT
+  scheduledStartDate: 2022-11-02T17:17:20.480+01:00
+  dueDate: 2022-11-02T18:17:20.480+01:00
+  phases:
+  - phase: Promotion
+    tasks:
+    - name: Create Revision Branch
+      type: github.CreateBranch
+      server: github
+      repositoryName: "${GIT_REPO_NAME}"
+      oldBranch: main
+      newBranch: "revision_${NEW_TAG}"
+    - name: Create Local Clone
+      type: github.cloneRepository
+      server: github
+      repositoryName: "${GIT_REPO_NAME}"
+      repositoryUrl: "${GIT_REPO_URL}"
+      localPath: "${LOCAL_GIT_CLONE_PATH}"
+      branchName: "revision_${NEW_TAG}"
+      removeExistingFolder: true
+    - name: Update Manifest File
+      type: kubernetes.updateManifest
+      manifestPath: "${LOCAL_GIT_CLONE_PATH}/${GIT_REPO_NAME}/${MANIFEST_PATH_IN_GIT}/${MANIFEST_FILE}"
+      imageUpdates:
+        ${CONTAINER_NAME}: "samuelblin/helloworld:${NEW_TAG}"
+    - name: Commit And Push Changes
+      type: github.commitFiles
+      server: github
+      localPath: "${LOCAL_GIT_CLONE_PATH}/${GIT_REPO_NAME}"
+      files:
+      - "${MANIFEST_PATH_IN_GIT}/${MANIFEST_FILE}"
+      commitMessage: Updated image tag
+      push: true
+    - name: Create Pull Request
+      type: github.CreatePullRequest
+      server: github
+      repositoryName: "${GIT_REPO_NAME}"
+      ^title: "${NEW_TAG} - Updated tag"
+      base: main
+      head: "revision_${NEW_TAG}"
+      body: Updated tag
+      variableMapping:
+        pythonScript.pullRequestNumber: "${PULL_REQUEST_NO}"
+    - name: Merge Pull Request
+      type: github.MergePullRequest
+      server: github
+      repositoryName: "${GIT_REPO_NAME}"
+      commitMessage: Approved Automation
+      variableMapping:
+        pythonScript.pullRequestNumber: "${PULL_REQUEST_NO}"
+    - name: Wait for merge
+      type: github.WaitForMerge
+      server: github
+      repositoryName: "${GIT_REPO_NAME}"
+      pollInterval: 10
+      variableMapping:
+        pythonScript.prid: "${PULL_REQUEST_NO}"
+    - name: Sync Argo Application
+      type: argocd.syncApplication
+      argocdServer: ArgoCD (192.168.56.3:30008)
+      appName: "${ARGO_APP_NAME}"
+    - name: Get Application Sync Status
+      type: argocd.getSyncStatus
+      argocdServer: ArgoCD (192.168.56.3:30008)
+      appName: "${ARGO_APP_NAME}"
+    color: '#3d6c9e'
+  tags:
+  - argocd
+  variables:
+  - type: xlrelease.StringVariable
+    key: ARGO_APP_NAME
+    showOnReleaseStart: false
+    value: helloworld-uat
+  - type: xlrelease.StringVariable
+    key: NEW_TAG
+  - type: xlrelease.StringVariable
+    key: GIT_REPO_URL
+    showOnReleaseStart: false
+    value: https://github.com/sblin/release-argo.git
+  - type: xlrelease.StringVariable
+    key: GIT_REPO_NAME
+    showOnReleaseStart: false
+    value: release-argo
+  - type: xlrelease.StringVariable
+    key: LOCAL_GIT_CLONE_PATH
+    showOnReleaseStart: false
+    value: /tmp/release-argo-uat
+  - type: xlrelease.StringVariable
+    key: MANIFEST_PATH_IN_GIT
+    showOnReleaseStart: false
+    value: argocd/apps/helloworld/uat
+  - type: xlrelease.StringVariable
+    key: MANIFEST_FILE
+    showOnReleaseStart: false
+    value: helloworld.yaml
+  - type: xlrelease.IntegerVariable
+    key: PULL_REQUEST_NO
+    showOnReleaseStart: false
+  - type: xlrelease.StringVariable
+    key: CONTAINER_NAME
+    showOnReleaseStart: false
+    value: helloworld-uat-container
+  variableMapping:
+    scriptUserPassword: "${global.user_admin_token}"
+  riskProfile: Default risk profile
+- template: Setup
+  scheduledStartDate: 2023-03-07T09:00:00+01:00
+  dueDate: 2023-03-07T10:00:00+01:00
+  phases:
+  - phase: Create namespaces
+    tasks:
+    - name: Create namespaces
+      type: kubernetes.createConf
+      kubectlConf: Global Kubectl on 192.168.56.2
+      spec: |-
+        ---
+        apiVersion: v1
+        kind: Namespace
+        metadata:
+            name: helloworld-dev
+        ---
+        apiVersion: v1
+        kind: Namespace
+        metadata:
+            name: helloworld-uat
+        ---
+        apiVersion: v1
+        kind: Namespace
+        metadata:
+            name: helloworld-prod
+    color: '#3d6c9e'
+  - phase: Init repo and project
+    tasks:
+    - name: Add Repository
+      type: argocd.addRepository
+      argocdServer: ArgoCD (192.168.56.3:30008)
+      url: "${repo_url}"
+      username: admin
+      variableMapping:
+        pythonScript.createdUrl: "${created_repo_url}"
+    - name: Add created repo in list
+      type: xlrelease.ScriptTask
+      script: "releaseVariables['list_of_repo'].add(releaseVariables['created_repo_url'])"
+    - name: Create Project HelloWorld
+      type: argocd.createProject
+      argocdServer: ArgoCD (192.168.56.3:30008)
+      projectName: helloworld
+      destinations:
+        https://kubernetes.default.svc: '*'
+      variableMapping:
+        pythonScript.sourceRepos: "${list_of_repo}"
+        pythonScript.projName: "${created_project_name}"
+    color: '#3d6c9e'
+  - phase: Create apps
+    tasks:
+    - name: Create helloworld-dev
+      type: argocd.createApplication
+      argocdServer: ArgoCD (192.168.56.3:30008)
+      appName: helloworld-dev
+      project: helloworld
+      url: "${repo_url}"
+      path: argocd/apps/helloworld/dev
+      namespace: helloworld-dev
+    - name: Create helloworld-uat
+      type: argocd.createApplication
+      argocdServer: ArgoCD (192.168.56.3:30008)
+      appName: helloworld-uat
+      project: helloworld
+      url: "${repo_url}"
+      path: argocd/apps/helloworld/uat
+      namespace: helloworld-uat
+    - name: Create helloworld-prod
+      type: argocd.createApplication
+      argocdServer: ArgoCD (192.168.56.3:30008)
+      appName: helloworld-prod
+      project: helloworld
+      url: "${repo_url}"
+      path: argocd/apps/helloworld/prod
+      namespace: helloworld-prod
+    color: '#3d6c9e'
+  - phase: Synch apps
+    tasks:
+    - name: Synch helloworld-dev
+      type: argocd.syncApplication
+      argocdServer: ArgoCD (192.168.56.3:30008)
+      appName: helloworld-dev
+    - name: Synch helloworld-uat
+      type: argocd.syncApplication
+      argocdServer: ArgoCD (192.168.56.3:30008)
+      appName: helloworld-uat
+    - name: Synch helloworld-prod
+      type: argocd.syncApplication
+      argocdServer: ArgoCD (192.168.56.3:30008)
+      appName: helloworld-prod
+    color: '#3d6c9e'
+  variables:
+  - type: xlrelease.StringVariable
+    key: repo_url
+    requiresValue: false
+    showOnReleaseStart: false
+    value: https://github.com/sblin/release-argo.git
+  - type: xlrelease.ListStringVariable
+    key: list_of_repo
+    requiresValue: false
+    showOnReleaseStart: false
+  - type: xlrelease.StringVariable
+    key: created_repo_url
+    requiresValue: false
+    showOnReleaseStart: false
+  - type: xlrelease.StringVariable
+    key: created_project_name
+    requiresValue: false
+    showOnReleaseStart: false
+  variableMapping:
+    scriptUserPassword: "${global.user_admin_token}"
+  riskProfile: Default risk profile
+- template: Setup-App-In-App
+  scheduledStartDate: 2023-03-07T09:00:00+01:00
+  dueDate: 2023-03-07T10:00:00+01:00
+  phases:
+  - phase: Create namespaces
+    tasks:
+    - name: Create namespaces
+      type: kubernetes.createConf
+      kubectlConf: Global Kubectl on 192.168.56.2
+      spec: |-
+        ---
+        apiVersion: v1
+        kind: Namespace
+        metadata:
+            name: helloworld-dev
+        ---
+        apiVersion: v1
+        kind: Namespace
+        metadata:
+            name: helloworld-uat
+        ---
+        apiVersion: v1
+        kind: Namespace
+        metadata:
+            name: helloworld-prod
+    color: '#3d6c9e'
+  - phase: Init repo and project
+    tasks:
+    - name: Add Repository
+      type: argocd.addRepository
+      argocdServer: ArgoCD (192.168.56.3:30008)
+      url: "${repo_url}"
+      variableMapping:
+        pythonScript.createdUrl: "${created_repo_url}"
+    - name: Add created repo in list
+      type: xlrelease.ScriptTask
+      script: "releaseVariables['list_of_repo'].add(releaseVariables['created_repo_url'])"
+    - name: Create Project HelloWorld
+      type: argocd.createProject
+      argocdServer: ArgoCD (192.168.56.3:30008)
+      projectName: helloworld
+      destinations:
+        https://kubernetes.default.svc: '*'
+      variableMapping:
+        pythonScript.sourceRepos: "${list_of_repo}"
+        pythonScript.projName: "${created_project_name}"
+    color: '#3d6c9e'
+  - phase: Create apps
+    tasks:
+    - name: Synch root-app
+      type: argocd.syncApplication
+      argocdServer: ArgoCD (192.168.56.3:30008)
+      appName: root-app
+    - name: Check
+      type: xlrelease.Task
+      owner: admin
+    color: '#3d6c9e'
+  - phase: Synch apps
+    tasks:
+    - name: Synch helloworld-dev
+      type: argocd.syncApplication
+      argocdServer: ArgoCD (192.168.56.3:30008)
+      appName: helloworld-dev
+    - name: Synch helloworld-uat
+      type: argocd.syncApplication
+      argocdServer: ArgoCD (192.168.56.3:30008)
+      appName: helloworld-uat
+    - name: Synch helloworld-prod
+      type: argocd.syncApplication
+      argocdServer: ArgoCD (192.168.56.3:30008)
+      appName: helloworld-prod
+    color: '#3d6c9e'
+  variables:
+  - type: xlrelease.StringVariable
+    key: repo_url
+    requiresValue: false
+    showOnReleaseStart: false
+    value: https://github.com/sblin/release-argo.git
+  - type: xlrelease.ListStringVariable
+    key: list_of_repo
+    requiresValue: false
+    showOnReleaseStart: false
+  - type: xlrelease.StringVariable
+    key: created_repo_url
+    requiresValue: false
+    showOnReleaseStart: false
+  - type: xlrelease.StringVariable
+    key: created_project_name
+    requiresValue: false
+    showOnReleaseStart: false
+  variableMapping:
+    scriptUserPassword: "${global.user_admin_token}"
+  riskProfile: Default risk profile
+- template: Tear Down
+  scheduledStartDate: 2023-03-07T09:00:00+01:00
+  dueDate: 2023-03-07T10:00:00+01:00
+  phases:
+  - phase: Remove ArgoCD Apps
+    tasks:
+    - name: Sync App
+      type: argocd.syncApplication
+    - name: Sync App
+      type: argocd.SyncApplication
+      capabilities:
+      - remote
+    color: '#3d6c9e'
+  - phase: Remove namespaces
+    tasks:
+    - name: Delete namespace helloworld-dev
+      type: kubernetes.executeCommand
+      kubectlConf: Global Kubectl on 192.168.56.2
+      command: delete namespace helloworld-dev
+    - name: Delete namespace helloworld-uat
+      type: kubernetes.executeCommand
+      kubectlConf: Global Kubectl on 192.168.56.2
+      command: delete namespace helloworld-uat
+    - name: Delete namespace helloworld-prod
+      type: kubernetes.executeCommand
+      kubectlConf: Global Kubectl on 192.168.56.2
+      command: delete namespace helloworld-prod
+    color: '#3d6c9e'
+  variableMapping:
+    scriptUserPassword: "${global.admin_user_token}"
+  riskProfile: Default risk profile
+- directory: DemoArgo
