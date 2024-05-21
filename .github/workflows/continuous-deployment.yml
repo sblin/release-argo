@@ -52,7 +52,7 @@ jobs:
       run: |
         cd argocd/helloworld-src
         sed -i "s/PLACEHOLDER/$SHA8/g" start-release.yaml
-        curl -LO https://dist.xebialabs.com/public/xl-cli/22.2.0/linux-amd64/xl
+        curl -LO https://dist.xebialabs.com/public/xl-cli/23.3.7/linux-amd64/xl
         chmod +x xl
         ./xl apply --xl-release-url=$XLR_URL --xl-release-username=$XLR_USER --xl-release-password=$XLR_PASS --file start-release.yaml
         echo `./xl version`
